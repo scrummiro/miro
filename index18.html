@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夕食献立ガチャ - 修正版</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px 0; }
+        .container { background: white; padding: 2rem; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); width: 90%; max-width: 480px; text-align: center; }
+        h1 { color: #2c3e50; margin-bottom: 1.5rem; font-size: 1.4rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .input-area { text-align: left; margin-bottom: 1.5rem; }
+        .input-group { background: #fff9f0; padding: 12px; border-radius: 10px; border: 1px solid #ffeeba; margin-bottom: 10px; }
+        .input-group.allergy { background: #fff0f0; border-color: #ffcccc; }
+        .input-group.yesterday { background: #f0f7ff; border-color: #bae1ff; }
+        label { font-size: 0.85rem; font-weight: bold; color: #856404; display: block; margin-bottom: 5px; }
+        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 0.95rem; }
+        
+        .menu-list { text-align: left; margin-bottom: 1.5rem; }
+        .menu-item { border-left: 6px solid #ccc; padding: 15px; margin-bottom: 15px; background: #fff; border-radius: 0 10px 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: relative; transition: 0.3s; }
+        .menu-item.selected { border-left-width: 12px; background-color: #f8fff8; border-color: #27ae60 !important; transform: scale(1.02); }
+
+        .item-和食 { border-color: #5d6d7e; }
+        .item-洋食 { border-color: #eb984e; }
+        .item-中華 { border-color: #c0392b; }
+        .item-エスニック { border-color: #9b59b6; }
+
+        .name { font-size: 1.15rem; font-weight: bold; color: #34495e; margin: 5px 0; display: block; }
+        .recipe-link { font-size: 0.75rem; color: #ff9900; text-decoration: none; font-weight: bold; border: 1px solid #ff9900; padding: 4px 10px; border-radius: 15px; transition: 0.2s; display: inline-block; margin: 5px 0; }
+        .recipe-link:hover { background-color: #ff9900; color: white; }
+
+        .rating-display { font-size: 1rem; margin-top: 5px; }
+        .star { color: #ccc; cursor: pointer; transition: 0.2s; font-size: 1.3rem; }
+        .star.active { color: #f1c40f; }
+
+        .calorie-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; color: white; display: inline-block; margin: 8px 0; }
+        .heavy { background-color: #e74c3c; }
+        .light { background-color: #27ae60; }
+
+        .action-area { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee; display: flex; justify-content: space-between; align-items: center; }
+        .select-btn { background: #f0f0f0; color: #666; border: none; padding: 8px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; font-weight: bold; }
+        .selected .select-btn { background: #27ae60; color: white; }
+        
+        .ingredients-list { font-size: 0.75rem; color: #888; }
+        .allergy-alert { color: #d63031; font-weight: bold; font-size: 0.7rem; background: #fff0f0; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+
+        button.main-btn { background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; padding: 15px; border-radius: 30px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
+        button.main-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .error { color: #c0392b; font-size: 0.85rem; margin-bottom: 10px; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🍴 晩ごはん献立サポーター</h1>
+
+    <div class="input-area">
+        <div class="input-group yesterday">
+            <label for="yesterdayInput">🌙 前日の夜（自動保存）</label>
+            <input type="text" id="yesterdayInput" placeholder="例：ハンバーグ">
+        </div>
+        <div class="input-group">
+            <label for="lunchInput">🍚 今日のお昼は何でしたか？</label>
+            <input type="text" id="lunchInput" placeholder="例：カレー、うどん">
+        </div>
+        <div class="input-group allergy">
+            <label for="avoidInput">⚠️ 苦手・アレルギー</label>
+            <input type="text" id="avoidInput" placeholder="例：卵、パクチー">
+        </div>
+    </div>
+
+    <div id="errorMsg" class="error"></div>
+    <div id="app" class="menu-list">
+        <p style="text-align:center; color:#95a5a6; padding: 10px;">「提案してもらう」を押してスタート！</p>
+    </div>
+    <button class="main-btn" onclick="generateMenu()">献立を提案してもらう</button>
+</div>
+
+<script>
+    const allergyList = ["卵", "乳", "小麦", "えび", "かに", "落花生", "そば", "牛肉", "豚肉", "鶏肉", "大豆", "胡麻", "魚"];
+    const STORAGE_KEY_AVOID = 'dinner_gacha_avoid_ingredients';
+    const STORAGE_KEY_YESTERDAY = 'dinner_gacha_yesterday_meal';
+    const STORAGE_KEY_RATINGS = 'dinner_gacha_meal_ratings';
+
+    const database = [
+        // --- 和食 (15品) ---
+        { name: "とんかつ定食", genre: "和食", calorie: "重め", kcal: 850, ingredients: "豚肉、パン粉（小麦）、卵" },
+        { name: "焼き魚定食", genre: "和食", calorie: "軽め", kcal: 520, ingredients: "サバ（魚）、大根" },
+        { name: "親子丼", genre: "和食", calorie: "重め", kcal: 700, ingredients: "鶏肉、玉ねぎ、卵" },
+        { name: "お刺身定食", genre: "和食", calorie: "軽め", kcal: 450, ingredients: "マグロ（魚）、豆腐（大豆）" },
+        { name: "すき焼き風煮込み", genre: "和食", calorie: "重め", kcal: 780, ingredients: "牛肉、豆腐（大豆）、卵" },
+        { name: "冷しゃぶサラダ", genre: "和食", calorie: "軽め", kcal: 490, ingredients: "豚肉、胡麻" },
+        { name: "サバの味噌煮", genre: "和食", calorie: "軽め", kcal: 580, ingredients: "サバ（魚）、味噌（大豆）" },
+        { name: "天ぷら盛り合わせ", genre: "和食", calorie: "重め", kcal: 820, ingredients: "えび、小麦粉、卵" },
+        { name: "肉じゃが定食", genre: "和食", calorie: "重め", kcal: 620, ingredients: "牛肉、じゃがいも、大豆" },
+        { name: "揚げ出し豆腐", genre: "和食", calorie: "軽め", kcal: 460, ingredients: "豆腐（大豆）、片栗粉" },
+        { name: "豚の生姜焼き", genre: "和食", calorie: "重め", kcal: 720, ingredients: "豚肉、小麦" },
+        { name: "ぶり大根", genre: "和食", calorie: "軽め", kcal: 540, ingredients: "ブリ（魚）、大根" },
+        { name: "筑前煮", genre: "和食", calorie: "軽め", kcal: 480, ingredients: "鶏肉、大豆" },
+        { name: "鶏の照り焼き丼", genre: "和食", calorie: "重め", kcal: 680, ingredients: "鶏肉、大豆、小麦" },
+        { name: "豚汁定食", genre: "和食", calorie: "軽め", kcal: 510, ingredients: "豚肉、大根、豆腐（大豆）" },
+
+        // --- 洋食 (15品) ---
+        { name: "ハンバーグ", genre: "洋食", calorie: "重め", kcal: 780, ingredients: "牛肉、豚肉、パン粉（小麦）、卵" },
+        { name: "魚のムニエル", genre: "洋食", calorie: "軽め", kcal: 480, ingredients: "タラ（魚）、バター（乳）、小麦粉" },
+        { name: "カルボナーラ", genre: "洋食", calorie: "重め", kcal: 820, ingredients: "パスタ（小麦）、豚肉、卵、乳" },
+        { name: "チキングリル", genre: "洋食", calorie: "軽め", kcal: 550, ingredients: "鶏肉" },
+        { name: "シーフードドリア", genre: "洋食", calorie: "重め", kcal: 760, ingredients: "えび、乳、小麦" },
+        { name: "ロールキャベツ", genre: "洋食", calorie: "軽め", kcal: 430, ingredients: "牛肉、豚肉" },
+        { name: "エビフライカレー", genre: "洋食", calorie: "重め", kcal: 920, ingredients: "えび、卵、小麦、牛肉" },
+        { name: "ポトフ", genre: "洋食", calorie: "軽め", kcal: 380, ingredients: "豚肉" },
+        { name: "オムライス", genre: "洋食", calorie: "重め", kcal: 710, ingredients: "卵、乳、鶏肉" },
+        { name: "ビーフシチュー", genre: "洋食", calorie: "重め", kcal: 850, ingredients: "牛肉、乳、小麦" },
+        { name: "海老グラタン", genre: "洋食", calorie: "重め", kcal: 650, ingredients: "えび、牛乳（乳）、小麦" },
+        { name: "ミートパスタ", genre: "洋食", calorie: "重め", kcal: 720, ingredients: "パスタ（小麦）、牛肉、豚肉" },
+        { name: "鮭のクリーム煮", genre: "洋食", calorie: "軽め", kcal: 510, ingredients: "鮭（魚）、乳、小麦" },
+        { name: "ステーキ", genre: "洋食", calorie: "重め", kcal: 880, ingredients: "牛肉" },
+        { name: "ミネストローネ", genre: "洋食", calorie: "軽め", kcal: 420, ingredients: "豚肉、トマト、大豆" },
+
+        // --- 中華 (15品) ---
+        { name: "麻婆豆腐", genre: "中華", calorie: "重め", kcal: 750, ingredients: "豆腐（大豆）、豚肉" },
+        { name: "タンメン", genre: "中華", calorie: "軽め", kcal: 510, ingredients: "中華麺（小麦）、豚肉" },
+        { name: "回鍋肉", genre: "中華", calorie: "重め", kcal: 720, ingredients: "豚肉、味噌（大豆）" },
+        { name: "海老水餃子", genre: "中華", calorie: "軽め", kcal: 430, ingredients: "えび、豚肉、小麦" },
+        { name: "青椒肉絲", genre: "中華", calorie: "重め", kcal: 680, ingredients: "牛肉、筍" },
+        { name: "八宝菜", genre: "中華", calorie: "重め", kcal: 620, ingredients: "豚肉、えび、卵" },
+        { name: "棒々鶏", genre: "中華", calorie: "軽め", kcal: 480, ingredients: "鶏肉、胡麻、大豆" },
+        { name: "酢豚", genre: "中華", calorie: "重め", kcal: 810, ingredients: "豚肉、小麦、大豆" },
+        { name: "ニラ玉炒め", genre: "中華", calorie: "軽め", kcal: 530, ingredients: "卵、豚肉" },
+        { name: "エビチリ", genre: "中華", calorie: "重め", kcal: 740, ingredients: "えび、卵、大豆" },
+        { name: "チャーハン", genre: "中華", calorie: "重め", kcal: 780, ingredients: "卵、豚肉、えび" },
+        { name: "担々麺", genre: "中華", calorie: "重め", kcal: 850, ingredients: "小麦、豚肉、胡麻、落花生" },
+        { name: "中華丼", genre: "中華", calorie: "重め", kcal: 650, ingredients: "豚肉、えび、卵" },
+        { name: "しゅうまい", genre: "中華", calorie: "軽め", kcal: 590, ingredients: "豚肉、小麦" },
+        { name: "トマト卵炒め", genre: "中華", calorie: "軽め", kcal: 410, ingredients: "卵、トマト" },
+
+        // --- エスニック (15品) ---
+        { name: "ガパオライス", genre: "エスニック", calorie: "重め", kcal: 720, ingredients: "鶏肉、卵" },
+        { name: "鶏肉のフォー", genre: "エスニック", calorie: "軽め", kcal: 450, ingredients: "米粉麺、鶏肉、魚醤（魚）" },
+        { name: "グリーンカレー", genre: "エスニック", calorie: "重め", kcal: 800, ingredients: "鶏肉、乳" },
+        { name: "生春巻き", genre: "エスニック", calorie: "軽め", kcal: 320, ingredients: "えび、鶏肉" },
+        { name: "ナシゴレン", genre: "エスニック", calorie: "重め", kcal: 750, ingredients: "えび、鶏肉、卵" },
+        { name: "トムヤムクン", genre: "エスニック", calorie: "軽め", kcal: 380, ingredients: "えび、魚醤（魚）" },
+        { name: "タンドリー", genre: "エスニック", calorie: "重め", kcal: 650, ingredients: "鶏肉、乳" },
+        { name: "パッタイ", genre: "エスニック", calorie: "重め", kcal: 780, ingredients: "えび、卵、落花生" },
+        { name: "カオマンガイ", genre: "エスニック", calorie: "軽め", kcal: 580, ingredients: "鶏肉、生姜" },
+        { name: "春雨サラダ", genre: "エスニック", calorie: "軽め", kcal: 350, ingredients: "えび、豚肉、魚醤" },
+        { name: "キーマカレー", genre: "エスニック", calorie: "重め", kcal: 730, ingredients: "牛肉、豚肉、小麦" },
+        { name: "ルーローハン", genre: "エスニック", calorie: "重め", kcal: 820, ingredients: "豚肉、卵、大豆、小麦" },
+        { name: "サムギョプサル", genre: "エスニック", calorie: "重め", kcal: 760, ingredients: "豚肉、胡麻" },
+        { name: "タコス", genre: "エスニック", calorie: "軽め", kcal: 550, ingredients: "牛肉、トルティーヤ（小麦）、チーズ（乳）" },
+        { name: "ビビンバ", genre: "エスニック", calorie: "重め", kcal: 640, ingredients: "牛肉、卵、大豆、胡麻" }
+    ];
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedAvoid = localStorage.getItem(STORAGE_KEY_AVOID);
+        if (savedAvoid) document.getElementById('avoidInput').value = savedAvoid;
+        const savedYesterday = localStorage.getItem(STORAGE_KEY_YESTERDAY);
+        if (savedYesterday) document.getElementById('yesterdayInput').value = savedYesterday;
+    });
+
+    function getAllRatings() {
+        const data = localStorage.getItem(STORAGE_KEY_RATINGS);
+        return data ? JSON.parse(data) : {};
+    }
+
+    function setRating(rating, name, index) {
+        const stars = document.querySelectorAll(`#item-${index} .star`);
+        stars.forEach((star, i) => star.classList.toggle('active', i < rating));
+        const ratings = getAllRatings();
+        ratings[name] = rating;
+        localStorage.setItem(STORAGE_KEY_RATINGS, JSON.stringify(ratings));
+    }
+
+    function selectMenu(name, index) {
+        document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('selected'));
+        const target = document.getElementById(`item-${index}`);
+        if(target) target.classList.add('selected');
+        document.getElementById('yesterdayInput').value = name;
+        localStorage.setItem(STORAGE_KEY_YESTERDAY, name);
+    }
+
+    function generateMenu() {
+        const yesterdayText = document.getElementById('yesterdayInput').value.trim();
+        const lunchText = document.getElementById('lunchInput').value.trim();
+        const avoidText = document.getElementById('avoidInput').value.trim();
+        const errorMsg = document.getElementById('errorMsg');
+        errorMsg.style.display = "none";
+        localStorage.setItem(STORAGE_KEY_AVOID, avoidText);
+
+        let filteredDb = database.filter(item => {
+            if (yesterdayText && item.name.includes(yesterdayText)) return false;
+            if (lunchText && item.name.includes(lunchText)) return false;
+            if (avoidText) {
+                const kws = avoidText.replace(/、/g, ',').split(',');
+                for (let k of kws) {
+                    const kw = k.trim();
+                    if (kw && (item.name.includes(kw) || item.ingredients.includes(kw))) return false;
+                }
+            }
+            return true;
+        });
+
+        const genres = ["和食", "洋食", "中華", "エスニック"];
+        if (!genres.every(g => filteredDb.some(item => item.genre === g))) {
+            errorMsg.style.display = "block";
+            errorMsg.innerText = "条件に合う料理が足りません！除外条件を減らしてください。";
+            return;
+        }
+
+        let selection = [];
+        let isBalanced = false;
+        const heavyKeywords = ["カツ", "カレー", "肉", "揚げ物", "丼", "ステーキ", "パスタ"];
+        const isLunchHeavy = heavyKeywords.some(key => lunchText.includes(key));
+
+        // 無限ループ防止用のカウンター
+        let safetyCounter = 0;
+        while (!isBalanced && safetyCounter < 100) {
+            selection = [];
+            genres.forEach(genre => {
+                const items = filteredDb.filter(d => d.genre === genre);
+                selection.push(items[Math.floor(Math.random() * items.length)]);
+            });
+            const heavyCount = selection.filter(item => item.calorie === "重め").length;
+            const lightCount = selection.filter(item => item.calorie === "軽め").length;
+            
+            if (heavyCount >= 1 && lightCount >= 1) {
+                if (isLunchHeavy && lightCount >= 2) isBalanced = true;
+                else if (!isLunchHeavy) isBalanced = true;
+            }
+            safetyCounter++;
+        }
+        render(selection);
+    }
+
+    function checkAllergens(ingredients) {
+        let found = [];
+        allergyList.forEach(a => { if (ingredients.includes(a)) found.push(a); });
+        return found;
+    }
+
+    function render(selection) {
+        const appDiv = document.getElementById('app');
+        const ratings = getAllRatings();
+
+        appDiv.innerHTML = selection.map((item, idx) => {
+            const allergens = checkAllergens(item.ingredients);
+            // 修正箇所：変数名を統一しました
+            const allergenAlert = allergens.length > 0 ? `<div class="allergy-alert">⚠️ ${allergens.join('・')}</div>` : '';
+            const prevRating = ratings[item.name] || 0;
+            const cookpadUrl = `https://cookpad.com/search/${encodeURIComponent(item.name)}`;
+
+            return `
+                <div class="menu-item item-${item.genre}" id="item-${idx}">
+                    <div class="header-row">
+                        <span class="genre">${item.genre}</span>
+                        <span class="kcal-display">${item.kcal} <small>kcal</small></span>
+                    </div>
+                    <span class="name">${item.name}</span>
+                    <a href="${cookpadUrl}" target="_blank" class="recipe-link">🍳 クックパッドで見る</a>
+                    <div class="rating-display">
+                        <span class="star ${prevRating >= 1 ? 'active' : ''}" onclick="setRating(1, '${item.name}', ${idx})">★</span>
+                        <span class="star ${prevRating >= 2 ? 'active' : ''}" onclick="setRating(2, '${item.name}', ${idx})">★</span>
+                        <span class="star ${prevRating >= 3 ? 'active' : ''}" onclick="setRating(3, '${item.name}', ${idx})">★</span>
+                    </div>
+                    <span class="calorie-badge ${item.calorie === '重め' ? 'heavy' : 'light'}">${item.calorie}</span>
+                    <div class="ingredients-list">🛒 ${item.ingredients} ${allergenAlert}</div>
+                    <div class="action-area">
+                        <button class="select-btn" onclick="selectMenu('${item.name}', ${idx})">これに決定！</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+</script>
+
+</body>
+</html>
